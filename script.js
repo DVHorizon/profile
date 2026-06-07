@@ -562,6 +562,9 @@ function createOceanScene(canvas) {
   let frame = 0;
   let enabled = true;
   let moon = null;
+  let stars = null;
+  let starsMaterial = null;
+  let waterFogMaterials = [];
 
   const state = {
     cameraX: 0,
@@ -573,21 +576,22 @@ function createOceanScene(canvas) {
     sunX: 0.0,
     sunY: 0.12,
     sunZ: -0.99,
-    distortionScale: 9.6,
-    waterSize: 1.5
+    distortionScale: 75.0,
+    waterSize: 0.9
   };
 
   function init() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     renderer.setClearColor(0x05050c, 1);
-    scene.fog = new THREE.FogExp2(0x05050c, 0.002);
+    scene.fog = new THREE.FogExp2(0x05050c, 0.00016);
     document.body.classList.add("webgl-ready");
 
     camera.position.set(state.cameraX, state.cameraY, state.cameraZ);
     camera.lookAt(state.lookX, state.lookY, state.lookZ);
 
     addReflectionEnvironment();
+    createGalaxyStars();
     sun.set(state.sunX, state.sunY, state.sunZ).normalize();
 
     if (THREE.Water) {
@@ -631,7 +635,7 @@ function createOceanScene(canvas) {
     const moonKey = new THREE.DirectionalLight(0xffffff, 2.25);
     const cyanRim = new THREE.PointLight(0x66f8ff, 3.4, 5200);
     const violetRim = new THREE.PointLight(0xb388ff, 2.2, 4600);
-    moonKey.position.set(0, 450, -1800);
+    moonKey.position.set(0, 900, -8000);
     cyanRim.position.set(-1200, 460, -1200);
     violetRim.position.set(1300, 620, -1600);
     scene.add(skyGlow, moonKey, cyanRim, violetRim);
@@ -677,67 +681,11 @@ function createOceanScene(canvas) {
     scene.add(sky);
 
     const horizonGeometry = new THREE.PlaneBufferGeometry(7600, 980);
-    const horizonMaterial = new THREE.MeshBasicMaterial({
-      color: 0x4ff7ff,
-      transparent: true,
-      opacity: 0.3,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    });
-    const horizon = new THREE.Mesh(horizonGeometry, horizonMaterial);
-    horizon.position.set(0, 76, -2550);
-    scene.add(horizon);
-
-    const stripMaterial = new THREE.MeshBasicMaterial({
-      color: 0xb388ff,
-      transparent: true,
-      opacity: 0.22,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    });
-    for (let i = 0; i < 7; i += 1) {
-      const strip = new THREE.Mesh(new THREE.PlaneBufferGeometry(1400 - i * 90, 3), stripMaterial.clone());
-      strip.material.opacity = 0.2 - i * 0.018;
-      strip.position.set((i - 3) * 260, -34 + i * 1.8, -580 - i * 170);
-      strip.rotation.x = -Math.PI / 2;
-      scene.add(strip);
-    }
-
-    const markerGeometry = new THREE.TorusBufferGeometry(900, 2.4, 8, 128);
-    const markerMaterial = new THREE.MeshBasicMaterial({
-      color: 0xb388ff,
-      transparent: true,
-      opacity: 0.24,
-      blending: THREE.AdditiveBlending
-    });
-    const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-    marker.rotation.x = Math.PI / 2;
-    marker.position.set(0, -30, -1050);
-    scene.add(marker);
-
-    // Create the moon in the sky
-    const moonTexture = new THREE.TextureLoader().load("https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg");
-    const moonGeometry = new THREE.SphereGeometry(110, 64, 64);
-    const moonMaterial = new THREE.MeshStandardMaterial({
-      map: moonTexture,
-      bumpMap: moonTexture,
-      bumpScale: 0.05,
-      emissiveMap: moonTexture,
-      emissive: 0xffffff,
-      emissiveIntensity: 0.85,
-      roughness: 1.0,
-      metalness: 0.0,
-      fog: false
-    });
-    moon = new THREE.Mesh(moonGeometry, moonMaterial);
-    moon.position.set(0, 220, -1800);
-    scene.add(moon);
-
-    // Create a soft blurred radial glow behind the moon (Plane geometry facing camera)
-    const moonGlowGeometry = new THREE.PlaneGeometry(500, 500);
-    const moonGlowMaterial = new THREE.ShaderMaterial({
+    // Soft vertical & horizontal fade-out for horizon plane to blend it seamlessly with water & sky
+    const horizonMaterial = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
       vertexShader: `
         varying vec2 vUv;
         void main() {
@@ -748,17 +696,218 @@ function createOceanScene(canvas) {
       fragmentShader: `
         varying vec2 vUv;
         void main() {
-          float dist = distance(vUv, vec2(0.5));
-          // Fade out smoothly and softly from the center (0.0) to the edges (0.5)
-          float glow = pow(1.0 - smoothstep(0.0, 0.5, dist), 2.2);
-          vec3 glowColor = vec3(1.0, 1.0, 0.95); // Bright warm white light
-          gl_FragColor = vec4(glowColor, glow * 0.85);
+          // Soft vertical fade-out near the water line (vUv.y around 0.35)
+          float verticalFade = 0.0;
+          if (vUv.y > 0.35) {
+            float h = (vUv.y - 0.35) / 0.65;
+            // Soft fade-in starting exactly at the water line, then smooth exponential decay going up
+            verticalFade = smoothstep(0.0, 0.12, h) * exp(-h * 2.8);
+            // Smoothly fade to 0.0 at the top edge of the horizon plane to prevent hard line borders
+            verticalFade *= smoothstep(1.0, 0.82, vUv.y);
+          }
+          // Horizontal fade-out at left and right edges
+          float horizontalFade = smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.8, vUv.x);
+          
+          vec3 horizonColor = vec3(0.31, 0.97, 1.0);
+          gl_FragColor = vec4(horizonColor, verticalFade * horizontalFade * 0.30);
         }
       `
     });
+    const horizon = new THREE.Mesh(horizonGeometry, horizonMaterial);
+    horizon.position.set(0, 76, -2550);
+    horizon.renderOrder = 3;
+    scene.add(horizon);
+
+
+
+    // Create multiple stacked layers of fog to give it volume and real height
+    const fogHeights = [1000, 1020, 1040, 1060];
+    const fogOpacities = [0.22, 0.16, 0.12, 0.06];
+    const fogSizes = [
+      { w: 9000, h: 5000 },
+      { w: 8600, h: 4800 },
+      { w: 8200, h: 4600 },
+      { w: 7800, h: 4400 }
+    ];
+
+    for (let i = 0; i < 4; i++) {
+      const fogPlaneGeometry = new THREE.PlaneGeometry(fogSizes[i].w, fogSizes[i].h);
+      const mat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          time: { value: 0 },
+          color: { value: new THREE.Color(0x7a8eff) } // Soft bluish-indigo fog
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          varying vec3 vWorldPosition;
+          void main() {
+            vUv = uv;
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float time;
+          uniform vec3 color;
+          varying vec2 vUv;
+          varying vec3 vWorldPosition;
+          
+          float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+          }
+          
+          float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(mix(hash(i + vec2(0.0,0.0)), hash(i + vec2(1.0,0.0)), u.x),
+                       mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), u.x), u.y);
+          }
+          
+          void main() {
+            // Horizontal fade to hide left and right borders of the plane
+            float horizontalFade = smoothstep(4200.0, 2600.0, abs(vWorldPosition.x));
+            
+            // Vertical fade: thickest at water line (y = -72.0), decays exponentially as we go up, and fades out going down
+            float verticalFade = 0.0;
+            if (vWorldPosition.y >= -72.0) {
+              float h = (vWorldPosition.y - (-72.0)) / 1200.0;
+              verticalFade = exp(-h * 1.2);
+              // Smoothly fade to 0.0 before reaching the top edge of the plane (no seams)
+              verticalFade *= smoothstep(3200.0, 1800.0, vWorldPosition.y);
+            } else {
+              float h = (-72.0 - vWorldPosition.y) / 100.0;
+              verticalFade = smoothstep(1.0, 0.0, h);
+            }
+            
+            // Slowly moving atmospheric mist noise using world XY coordinates for vertical orientation
+            vec2 noiseUv = vWorldPosition.xy * 0.0012 - vec2(time * 0.018 + float(${i}) * 0.4, time * 0.006);
+            float n = noise(noiseUv) * 0.58 + noise(noiseUv * 2.4) * 0.42;
+            
+            float finalGlow = verticalFade * horizontalFade * (0.35 + n * 0.65);
+            
+            gl_FragColor = vec4(color, finalGlow * float(${fogOpacities[i]}));
+          }
+        `
+      });
+      const waterFog = new THREE.Mesh(fogPlaneGeometry, mat);
+      // No rotation around X axis - stand vertically to cover the sky
+      waterFog.position.set(0, fogHeights[i], -1500 - i * 150);
+      waterFog.renderOrder = 4;
+      scene.add(waterFog);
+      waterFogMaterials.push(mat);
+    }
+
+    // Create the moon in the sky
+    const moonTexture = new THREE.TextureLoader().load("assets/moon.jpg");
+    moonTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const moonGeometry = new THREE.SphereGeometry(700, 64, 64);
+    const moonMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        ...THREE.UniformsLib.fog,
+        u_moonTexture: { value: moonTexture },
+        lightDir: { value: new THREE.Vector3(0.75, 0.2, 0.6).normalize() },
+        shadowIntensity: { value: 0.0 }, // Cleft part completely black
+        brightness: { value: 2.2 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vWorldNormal;
+        #include <fog_pars_vertex>
+        void main() {
+          vUv = uv;
+          vWorldNormal = normalize(vec3(modelMatrix * vec4(normal, 0.0)));
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          #include <fog_vertex>
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D u_moonTexture;
+        uniform vec3 lightDir;
+        uniform float shadowIntensity;
+        uniform float brightness;
+        varying vec2 vUv;
+        varying vec3 vWorldNormal;
+        #include <fog_pars_fragment>
+        void main() {
+          vec4 texColor = texture2D(u_moonTexture, vUv);
+          
+          // Boost local contrast to enhance surface details and craters
+          vec3 enhancedColor = texColor.rgb;
+          enhancedColor = clamp((enhancedColor - 0.5) * 1.35 + 0.5, 0.0, 1.0);
+          
+          vec3 normal = normalize(vWorldNormal);
+          float dotNL = dot(normal, lightDir);
+          
+          // Smooth terminator transition
+          float lightFactor = smoothstep(-0.1, 0.15, dotNL);
+          float diffuse = mix(shadowIntensity, 1.0, lightFactor);
+          
+          gl_FragColor = vec4(enhancedColor * diffuse * brightness, 1.0);
+          #include <fog_fragment>
+        }
+      `,
+      fog: false,
+      transparent: true
+    });
+
+    moon = new THREE.Mesh(moonGeometry, moonMaterial);
+    moon.position.set(0, 850, -8000);
+    moon.renderOrder = 2;
+    scene.add(moon);
+
+    // Create a soft blurred radial glow behind the moon (Plane geometry facing camera)
+    const moonGlowGeometry = new THREE.PlaneGeometry(3000, 3000);
+    const moonGlowMaterial = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([
+        THREE.UniformsLib.fog,
+        {}
+      ]),
+      transparent: true,
+      depthWrite: false,
+      vertexShader: `
+        varying vec2 vUv;
+        #include <fog_pars_vertex>
+        void main() {
+          vUv = uv;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          #include <fog_vertex>
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        #include <fog_pars_fragment>
+        void main() {
+          vec2 center = vec2(0.5);
+          float dist = distance(vUv, center);
+          
+          // Base radial glow
+          float glow = pow(1.0 - smoothstep(0.0, 0.5, dist), 2.2);
+          
+          // Crescent mask for the glow (fades out on the bottom-left dark side)
+          vec2 dir = vUv - center;
+          vec2 lightDir2D = normalize(vec2(0.75, 0.2));
+          float dotGlow = dot(normalize(dir + vec2(0.0001)), lightDir2D);
+          float mask = smoothstep(-0.6, 0.4, dotGlow);
+          mask = mix(0.01, 1.0, mask);
+          
+          vec3 glowColor = vec3(1.0, 1.0, 0.95); // Bright warm white light
+          gl_FragColor = vec4(glowColor, glow * mask * 1.1);
+          #include <fog_fragment>
+        }
+      `,
+      fog: true
+    });
     const moonGlow = new THREE.Mesh(moonGlowGeometry, moonGlowMaterial);
-    // Position it slightly behind the moon (z = -1802) to prevent depth fighting
-    moonGlow.position.set(moon.position.x, moon.position.y, moon.position.z - 2);
+    // Position it slightly behind the moon (z = -8010) to prevent depth fighting
+    moonGlow.position.set(moon.position.x, moon.position.y, moon.position.z - 10);
+    moonGlow.renderOrder = 1;
     scene.add(moonGlow);
 
     // Add PointLight at the center of the moon to illuminate scene fog
@@ -791,10 +940,10 @@ function createOceanScene(canvas) {
         varying vec3 vPosition;
         void main() {
            vec3 p = position;
-          float w1 = sin(p.x * 0.0035 + time * 1.9);
-          float w2 = cos(p.y * 0.0045 - time * 1.7);
-          float w3 = sin((p.x + p.y) * 0.0025 + time * 2.7);
-          float wave = w1 * 44.0 + w2 * 36.0 + w3 * 30.0;
+          float w1 = sin(p.x * 0.0018 + time * 1.9);
+          float w2 = cos(p.y * 0.0022 - time * 1.7);
+          float w3 = sin((p.x + p.y) * 0.0012 + time * 2.7);
+          float wave = w1 * 180.0 + w2 * 150.0 + w3 * 120.0;
           p.z += wave;
           vWave = wave;
           vPosition = p;
@@ -808,11 +957,59 @@ function createOceanScene(canvas) {
         uniform float time;
         varying float vWave;
         varying vec3 vPosition;
+
+        float hash(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+
         void main() {
           float shine = smoothstep(12.0, 55.0, abs(vWave));
           float bands = sin((vPosition.x + vPosition.y) * 0.016 + time * 2.0) * 0.5 + 0.5;
           vec3 color = mix(colorA, colorB, shine * 0.72);
           color = mix(color, colorC, bands * 0.16);
+
+          // Procedural galaxy reflection
+          vec2 pos = vPosition.xy;
+          float galaxyPath = dot(pos, vec2(-0.45, 0.89));
+          float distToCore = length(pos - vec2(-1500.0, 3000.0));
+
+          // Concentration in the galaxy band & core - wider band, less concentrated core
+          float bandIntensity = exp(-galaxyPath * galaxyPath * 0.0000001);
+          float coreIntensity = exp(-distToCore * distToCore * 0.0000002) * 0.8;
+          float galaxyGlow = (bandIntensity * 0.70 + coreIntensity * 0.30);
+
+          // Apply waves distortion to reflection
+          float waveDistort = sin(vPosition.x * 0.05 + time * 3.0) * 8.0;
+          vec2 distortedGrid = (pos + vec2(waveDistort)) * 0.04;
+          vec2 distortedId = floor(distortedGrid);
+          vec2 distortedF = fract(distortedGrid);
+          float distortedStar = 0.0;
+          float h2 = hash(distortedId);
+          if (h2 > 0.90) {
+            vec2 offset = vec2(hash(distortedId + 0.12), hash(distortedId + 0.58)) * 0.8;
+            float d = length(distortedF - offset);
+            float twinkle = sin(time * (1.6 + h2 * 2.5) + h2 * 6.28) * 0.5 + 0.5;
+            distortedStar = smoothstep(0.08, 0.0, d / (0.01 + 0.03 * h2 * twinkle));
+          }
+
+          // Choose base pastel color for fallback reflection
+          vec3 starColor = vec3(0.92, 0.96, 1.0);
+          if (distortedStar > 0.0) {
+            float cSelect = hash(distortedId + 0.99);
+            if (cSelect < 0.2) starColor = vec3(0.55, 0.90, 0.98);
+            else if (cSelect < 0.4) starColor = vec3(0.78, 0.65, 0.98);
+            else if (cSelect < 0.6) starColor = vec3(0.98, 0.86, 0.65);
+            else if (cSelect < 0.8) starColor = vec3(0.98, 0.70, 0.80);
+            else starColor = vec3(0.60, 0.92, 0.82);
+            
+            float cShift = sin(time * 2.0 + cSelect * 6.28) * 0.1;
+            starColor = clamp(starColor + vec3(cShift, -cShift, 0.0), 0.4, 1.0);
+          }
+
+          color += starColor * distortedStar * galaxyGlow * 0.85;
+
           gl_FragColor = vec4(color, 0.86);
         }
       `
@@ -836,18 +1033,26 @@ function createOceanScene(canvas) {
     window.__DVHorizonWaterStatus.lastFrameAt = performance.now();
     updateCamera();
     if (water) {
-      water.material.uniforms["time"].value += 1.6 / 60.0;
+      water.material.uniforms["time"].value += 0.55 / 60.0;
       water.material.uniforms.distortionScale.value = state.distortionScale;
       water.material.uniforms.size.value = state.waterSize;
       sun.set(state.sunX, state.sunY, state.sunZ).normalize();
       water.material.uniforms.sunDirection.value.copy(sun);
     }
+    if (starsMaterial) {
+      starsMaterial.uniforms["time"].value = clock.getElapsedTime();
+    }
+    if (waterFogMaterials.length > 0) {
+      waterFogMaterials.forEach(mat => {
+        mat.uniforms["time"].value = clock.getElapsedTime();
+      });
+    }
     if (fallbackWater) {
-      fallbackWater.material.uniforms.time.value = clock.getElapsedTime();
+      fallbackWater.material.uniforms.time.value = clock.getElapsedTime() * 0.35;
       fallbackWater.material.uniforms.colorC.value.lerp(new THREE.Color(state.sunY > 0.9 ? 0x70f6ff : 0xb388ff), 0.04);
     }
     if (moon) {
-      moon.rotation.y += 0.0015;
+      moon.rotation.y += 0.0002;
     }
     renderer.render(scene, camera);
     clock.getElapsedTime();
@@ -880,6 +1085,149 @@ function createOceanScene(canvas) {
     enabled = true;
     window.__DVHorizonWaterStatus.active = true;
     animate();
+  }
+
+  function createGlowTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.2, 'rgba(230, 245, 255, 0.85)');
+    gradient.addColorStop(0.5, 'rgba(120, 200, 255, 0.35)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  function createGalaxyStars() {
+    const starsCount = 1500;
+    const starsGeometry = new THREE.BufferGeometry();
+    const starsPositions = new Float32Array(starsCount * 3);
+    const starsSizes = new Float32Array(starsCount);
+    const starsPhases = new Float32Array(starsCount);
+
+    const u = new THREE.Vector3(-1500, 1000, -3000).normalize();
+    const v = new THREE.Vector3(-u.z, 0, u.x).normalize();
+    const w = new THREE.Vector3().crossVectors(u, v).normalize();
+
+    const R = 8000;
+
+    for (let i = 0; i < starsCount; i++) {
+      let p = new THREE.Vector3();
+      let isValid = false;
+      while (!isValid) {
+        if (i < 250) {
+          // Core stars: softer, wider concentration around core direction 'u'
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.pow(Math.random(), 1.5) * 0.35; 
+          p = u.clone()
+            .addScaledVector(v, Math.cos(angle) * dist)
+            .addScaledVector(w, Math.sin(angle) * dist)
+            .normalize();
+        } else {
+          // Band stars: stretched along the diagonal band (U-V plane)
+          // Generates all along the circle (from -PI to PI)
+          const t = (Math.random() - 0.5) * Math.PI * 2.0; 
+          const widthFactor = (Math.random() - 0.5) * (Math.random() - 0.5) * 0.46;
+          p = new THREE.Vector3()
+            .addScaledVector(u, Math.cos(t))
+            .addScaledVector(v, Math.sin(t))
+            .addScaledVector(w, widthFactor)
+            .normalize();
+        }
+        
+        // Ensure stars are in the upper sky (y is above the horizon level)
+        if (p.y > -0.02) {
+          isValid = true;
+        }
+      }
+
+      const radius = R * (0.95 + Math.random() * 0.1);
+      
+      starsPositions[i * 3] = p.x * radius;
+      starsPositions[i * 3 + 1] = p.y * radius;
+      starsPositions[i * 3 + 2] = p.z * radius;
+
+      if (i < 250) {
+        starsSizes[i] = 14.0 + Math.random() * 22.0;
+      } else {
+        starsSizes[i] = 8.0 + Math.random() * 16.0;
+      }
+      
+      starsPhases[i] = Math.random() * Math.PI * 2;
+    }
+
+    starsGeometry.setAttribute('position', new THREE.BufferAttribute(starsPositions, 3));
+    starsGeometry.setAttribute('size', new THREE.BufferAttribute(starsSizes, 1));
+    starsGeometry.setAttribute('phase', new THREE.BufferAttribute(starsPhases, 1));
+
+    const starTexture = createGlowTexture();
+
+    starsMaterial = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([
+        THREE.UniformsLib.fog,
+        {
+          time: { value: 0 },
+          pointTexture: { value: starTexture }
+        }
+      ]),
+      vertexShader: `
+        uniform float time;
+        attribute float size;
+        attribute float phase;
+        varying float vPhase;
+        #include <fog_pars_vertex>
+        void main() {
+          vPhase = phase;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          #include <fog_vertex>
+          gl_Position = projectionMatrix * mvPosition;
+          gl_PointSize = size * (2200.0 / -mvPosition.z);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        uniform sampler2D pointTexture;
+        varying float vPhase;
+        #include <fog_pars_fragment>
+        void main() {
+          float twinkle = 0.40 + 0.60 * sin(time * (1.6 + sin(vPhase)) + vPhase);
+          
+          // Select base pastel colors using phase (avoids overly saturated colors)
+          float colorSelect = fract(vPhase * 0.159);
+          vec3 starColor;
+          if (colorSelect < 0.2) {
+            starColor = vec3(0.55, 0.90, 0.98); // soft cyan
+          } else if (colorSelect < 0.4) {
+            starColor = vec3(0.78, 0.65, 0.98); // soft lavender/violet
+          } else if (colorSelect < 0.6) {
+            starColor = vec3(0.98, 0.86, 0.65); // soft gold/cream
+          } else if (colorSelect < 0.8) {
+            starColor = vec3(0.98, 0.70, 0.80); // soft rose/pink
+          } else {
+            starColor = vec3(0.60, 0.92, 0.82); // soft mint/aquamarine
+          }
+          
+          // Subtle atmospheric color shifting over time
+          float cShift = sin(time * 2.0 + vPhase) * 0.1;
+          starColor = clamp(starColor + vec3(cShift, -cShift, sin(time * 1.5 + vPhase * 2.0) * 0.08), 0.4, 1.0);
+
+          vec4 texColor = texture2D(pointTexture, gl_PointCoord);
+          gl_FragColor = texColor * vec4(starColor * 1.5, twinkle);
+          #include <fog_fragment>
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false
+    });
+
+    stars = new THREE.Points(starsGeometry, starsMaterial);
+    scene.add(stars);
   }
 
   return { init, setScene, pause, resume };
@@ -916,6 +1264,56 @@ function createNativeOceanRenderer(canvas) {
         + sin((p.x - p.y) * scale * 0.38 + u_time * speed * 1.24) * weight * 0.48;
     }
 
+    float hash(vec2 p) {
+      p = fract(p * vec2(123.34, 456.21));
+      p += dot(p, p + 45.32);
+      return fract(p.x * p.y);
+    }
+
+    vec3 getGalaxyStars(vec2 pos, float time) {
+      float angle = 0.523;
+      float cosA = cos(angle);
+      float sinA = sin(angle);
+      vec2 rotPos = vec2(pos.x * cosA - pos.y * sinA, pos.x * sinA + pos.y * cosA);
+
+      vec2 rotCore = vec2(-0.2, 0.1);
+
+      vec2 grid = rotPos * 45.0;
+      vec2 id = floor(grid);
+      vec2 f = fract(grid);
+      float star = 0.0;
+      float h = hash(id);
+      if (h > 0.91) {
+        vec2 offset = vec2(hash(id + 0.12), hash(id + 0.62)) * 0.8;
+        float d = length(f - offset);
+        float twinkle = sin(time * (1.6 + h * 2.2) + h * 6.28) * 0.5 + 0.5;
+        star = smoothstep(0.1, 0.0, d / (0.01 + 0.035 * h * twinkle));
+      }
+
+      float distToMidline = abs(rotPos.y - rotCore.y);
+      float distToCore = length(rotPos - rotCore);
+      // Wider band and more dispersed core
+      float bandGlow = exp(-distToMidline * distToMidline * 6.0);
+      float coreGlow = exp(-distToCore * distToCore * 3.5) * 0.8;
+      float intensity = bandGlow * 0.70 + coreGlow * 0.30;
+
+      // Base pastel color selection using hash
+      vec3 starColor = vec3(0.92, 0.96, 1.0);
+      if (star > 0.0) {
+        float cSelect = hash(id + 0.88);
+        if (cSelect < 0.2) starColor = vec3(0.55, 0.90, 0.98); // soft cyan
+        else if (cSelect < 0.4) starColor = vec3(0.78, 0.65, 0.98); // soft lavender
+        else if (cSelect < 0.6) starColor = vec3(0.98, 0.86, 0.65); // soft gold
+        else if (cSelect < 0.8) starColor = vec3(0.98, 0.70, 0.80); // soft rose
+        else starColor = vec3(0.60, 0.92, 0.82); // soft mint
+        
+        float cShift = sin(time * 2.0 + cSelect * 6.28) * 0.1;
+        starColor = clamp(starColor + vec3(cShift, -cShift, 0.0), 0.4, 1.0);
+      }
+
+      return starColor * star * intensity;
+    }
+
     void main() {
       vec2 uv = gl_FragCoord.xy / u_resolution.xy;
       vec2 p = (uv - 0.5) * vec2(u_resolution.x / u_resolution.y, 1.0);
@@ -923,9 +1321,9 @@ function createNativeOceanRenderer(canvas) {
       float perspective = 1.0 / max(0.18, depth + 0.08);
       vec2 q = vec2(p.x * perspective, depth * 8.0);
 
-      float w = wave(q, 1.4, 3.0, 0.60);
-      w += wave(q + vec2(2.4, -1.1), 2.0, 5.5, 0.26);
-      w += wave(q + vec2(-0.8, 1.7), 2.6, 9.0, 0.12);
+      float w = wave(q, 1.4, 1.5, 1.80);
+      w += wave(q + vec2(2.4, -1.1), 2.0, 2.8, 0.85);
+      w += wave(q + vec2(-0.8, 1.7), 2.6, 4.5, 0.40);
       float ridge = smoothstep(0.62, 1.16, abs(w) * u_intensity);
       float horizon = smoothstep(0.56, 0.86, uv.y);
       float mist = smoothstep(0.42, 0.76, uv.y);
@@ -933,9 +1331,21 @@ function createNativeOceanRenderer(canvas) {
       vec3 deep = vec3(0.008, 0.018, 0.035);
       vec3 teal = vec3(0.045, 0.48, 0.58);
       vec3 violet = vec3(0.46, 0.25, 0.86);
+
+      // Procedural sky stars
+      vec2 skyPos = p * 1.5;
+      vec3 skyStars = getGalaxyStars(skyPos + vec2(0.3, 0.0), u_time);
       vec3 sky = mix(vec3(0.01, 0.015, 0.04), vec3(0.07, 0.11, 0.25), uv.y);
+      sky += skyStars * (1.0 - mist);
+
       vec3 accent = mix(teal, violet, u_palette);
       vec3 water = mix(deep, accent, ridge * 0.74 + depth * 0.1);
+
+      // Procedural water stars reflection
+      vec2 reflectedPos = vec2(q.x * 0.15 - w * 0.04, (8.0 - q.y) * 0.12 - w * 0.04) + vec2(0.3, 0.0);
+      vec3 waterStars = getGalaxyStars(reflectedPos, u_time);
+      float reflectionFade = smoothstep(0.0, 0.4, uv.y) * (1.0 - uv.y);
+      water += waterStars * 0.72 * reflectionFade;
 
       float spec = pow(max(0.0, sin((q.x + w) * 7.0 + u_time * 1.7)), 18.0) * 0.55;
       spec += pow(max(0.0, cos((q.x - q.y) * 11.0 - u_time * 2.1)), 24.0) * 0.26;
@@ -996,7 +1406,7 @@ function createNativeOceanRenderer(canvas) {
     gl.enableVertexAttribArray(positionLocation);
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
     gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
-    gl.uniform1f(timeLocation, now * 0.001);
+    gl.uniform1f(timeLocation, now * 0.00035);
     gl.uniform1f(intensityLocation, intensity);
     gl.uniform1f(paletteLocation, palette);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -1072,8 +1482,8 @@ function initScrollScenes(app) {
       sunX: 0.0,
       sunY: 0.12,
       sunZ: -0.99,
-      distortionScale: 9.6,
-      waterSize: 1.5
+      distortionScale: 75.0,
+      waterSize: 0.9
     },
     about: {
       cameraX: -96,
@@ -1085,8 +1495,8 @@ function initScrollScenes(app) {
       sunX: 0.0,
       sunY: 0.12,
       sunZ: -0.99,
-      distortionScale: 10.0,
-      waterSize: 1.6
+      distortionScale: 78.0,
+      waterSize: 0.95
     },
     projects: {
       cameraX: 140,
@@ -1098,8 +1508,8 @@ function initScrollScenes(app) {
       sunX: 0.0,
       sunY: 0.12,
       sunZ: -0.99,
-      distortionScale: 11.5,
-      waterSize: 1.7
+      distortionScale: 85.0,
+      waterSize: 1.0
     },
     contact: {
       cameraX: 0,
@@ -1111,8 +1521,8 @@ function initScrollScenes(app) {
       sunX: 0.0,
       sunY: 0.12,
       sunZ: -0.99,
-      distortionScale: 3.5,
-      waterSize: 0.6
+      distortionScale: 28.0,
+      waterSize: 0.4
     }
   };
 
