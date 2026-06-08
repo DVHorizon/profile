@@ -21,7 +21,7 @@ const profileData = {
       title: "SellPhones E-commerce",
       kicker: "Full-stack Platform",
       description: "A full-stack e-commerce platform for smartphones, built with Laravel and Docker for a smooth, reliable shopping experience.",
-      image: "https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=2560&q=85",
+      image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=2560&q=85",
       fallback: "Remote smartphone display image unavailable. Skeleton fallback is active.",
       tags: ["Laravel", "PHP", "Docker"]
     },
