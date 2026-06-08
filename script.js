@@ -209,7 +209,7 @@ function renderProfile() {
       .map((project) => {
         const tags = project.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("");
         return `
-          <article class="project-card tilt-frame" data-tilt data-depth="8">
+          <article class="project-card tilt-frame" data-depth="8">
             <figure class="image-shell project-media" data-fallback="${escapeHtml(project.fallback)}">
               <img src="${project.image}" alt="${escapeHtml(project.title)} project preview" width="2560" height="1440" loading="lazy" decoding="async">
             </figure>
