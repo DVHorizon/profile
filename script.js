@@ -7,7 +7,7 @@ const profileData = {
   emails: ["dvhorizon@gmail.com", "dangvanha123b@gmail.com"],
   education: "IT Student at FIT TDC — Thu Duc College of Technology.",
   skills: ["Laravel", "Docker", "JavaScript", "React", "PHP", "HTML/CSS", "C#", "Java"],
-  avatar: "assets/dvhorizon-avatar-top.png",
+  avatar: "assets/dvhorizon-avatar.png",
   projects: [
     {
       title: "AI CareerPath",
