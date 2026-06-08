@@ -1,37 +1,37 @@
 const profileData = {
-  name: "DVHorizon",
-  role: "Developer",
+  name: "Dang Van Ha",
+  role: "IT Student & Developer",
   github: "https://github.com/DVHorizon",
   facebook: "https://www.facebook.com/haewonjongun/",
   tiktok: "https://www.tiktok.com/@im.river.one",
   emails: ["dvhorizon@gmail.com", "dangvanha123b@gmail.com"],
-  education: "Sinh viên khoa Công nghệ thông tin FIT TDC, Trường Cao đẳng Công nghệ Thủ Đức.",
-  skills: ["Laravel", "Docker", "C#", "Java", "Javascript", "PHP", "HTML/CSS"],
+  education: "IT Student at FIT TDC — Thu Duc College of Technology.",
+  skills: ["Laravel", "Docker", "JavaScript", "React", "PHP", "HTML/CSS", "C#", "Java"],
   avatar: "assets/dvhorizon-avatar-top.png",
   projects: [
     {
-      title: "Real WebGL Water Portfolio",
-      kicker: "Three.js Water",
-      description: "A cinematic portfolio surface powered by the official Three.js Water shader, fog depth, and scroll-driven camera movement.",
+      title: "AI CareerPath",
+      kicker: "AI Web App",
+      description: "An AI-powered platform that helps IT students find personalized learning paths, skill analysis, roadmap recommendations, and weekly schedules.",
+      image: "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&w=2560&q=85",
+      fallback: "Remote AI network visualization unavailable. The project layout remains stable.",
+      tags: ["React", "Vite", "Three.js"]
+    },
+    {
+      title: "SellPhones E-commerce",
+      kicker: "Full-stack Platform",
+      description: "A full-stack e-commerce platform for smartphones, built with Laravel and Docker for a smooth, reliable shopping experience.",
+      image: "https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=2560&q=85",
+      fallback: "Remote smartphone display image unavailable. Skeleton fallback is active.",
+      tags: ["Laravel", "PHP", "Docker"]
+    },
+    {
+      title: "DVHorizon Portfolio",
+      kicker: "Personal Branding",
+      description: "Personal portfolio featuring a cinematic WebGL ocean, GSAP scroll animations, glassmorphism audio player, and 2D fallback mode.",
       image: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=2560&q=85",
-      fallback: "Remote ocean image unavailable. The cinematic project frame remains stable.",
-      tags: ["Three.js", "Water.js", "GSAP"]
-    },
-    {
-      title: "Containerized Laravel Workflow",
-      kicker: "Backend Systems",
-      description: "A practical engineering direction centered on Laravel, Docker, PHP, and reproducible local development workflows.",
-      image: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=2560&q=85",
-      fallback: "Remote cyberpunk image unavailable. Skeleton fallback is active.",
-      tags: ["Laravel", "Docker", "PHP"]
-    },
-    {
-      title: "Cross-stack Developer Toolkit",
-      kicker: "Applied Programming",
-      description: "A stack profile spanning C#, Java, JavaScript, and UI implementation for durable tools and production-minded learning.",
-      image: "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=2560&q=85",
-      fallback: "Remote abstract technology image unavailable. Layout remains stable.",
-      tags: ["C#", "Java", "Javascript"]
+      fallback: "Remote ocean wave image unavailable. Layout remains stable.",
+      tags: ["JavaScript", "WebGL", "GSAP"]
     }
   ]
 };

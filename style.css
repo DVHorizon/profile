@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Azonix";
+  src: url("assets/fonts/Azonix.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   --bg: #05050c;
@@ -16,7 +24,7 @@
   --header: 76px;
   --radius: 10px;
   --font-body: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-wide: "Syncopate", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-wide: "Azonix", "Syncopate", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   font-family: var(--font-body);
 }
 
@@ -238,30 +246,8 @@ main {
 
 .hero-copy h1 {
   color: #ffffff;
-  -webkit-text-stroke: 1.5px #05050c;
-  paint-order: stroke fill;
   display: inline-block;
-
-  /* 3D Solid Block Shadow (Cyan-to-Navy Gradient Extrusion) */
-  text-shadow:
-    1px -1px 0px rgba(255, 255, 255, 0.25),
-    -1px 1px 0px rgba(0, 0, 0, 0.8),
-    1px 1px 0px #4ff7ff,
-    2px 2px 0px #3ee1ea,
-    3px 3px 0px #2eccd4,
-    4px 4px 0px #1eb7bf,
-    5px 5px 0px #0ea1a9,
-    6px 6px 0px #008c94,
-    7px 7px 0px #00777e,
-    8px 8px 0px #006268,
-    9px 9px 0px #004d52,
-    10px 10px 0px #00383c,
-    11px 11px 0px #002326,
-    12px 12px 0px #001012;
 }
-
-
-
 
 h1,
 h2,
@@ -270,15 +256,14 @@ p {
   margin-top: 0;
 }
 
-h1,
-h2 {
-  max-width: 12.5ch;
+h1 {
+  max-width: 22ch;
   margin-bottom: 0;
   font-family: var(--font-wide);
-  font-size: clamp(1.8rem, 4.2vw, 3.8rem);
-  line-height: 1.1;
+  font-size: clamp(1.4rem, 2.6vw, 2.2rem);
+  line-height: 1.25;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   word-break: normal;
   overflow-wrap: normal;
@@ -286,17 +271,26 @@ h2 {
 }
 
 h2 {
-  max-width: 12ch;
-  font-size: clamp(2.2rem, 5vw, 4.9rem);
+  max-width: 20ch;
+  margin-bottom: 0;
+  font-family: var(--font-wide);
+  font-size: clamp(1.6rem, 3.2vw, 2.6rem);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
 }
 
 h3 {
   margin-bottom: 10px;
   font-family: var(--font-wide);
-  font-size: clamp(1.1rem, 2vw, 1.8rem);
-  line-height: 1.15;
+  font-size: clamp(0.95rem, 1.6vw, 1.35rem);
+  line-height: 1.2;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
